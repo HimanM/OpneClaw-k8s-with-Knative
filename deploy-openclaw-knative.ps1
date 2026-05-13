@@ -1,3 +1,8 @@
+param(
+    [ValidateSet(80, 8080)]
+    [int]$LocalPort = 8080
+)
+
 $ErrorActionPreference = "Stop"
 
 $knativeVersion = "knative-v1.22.0"
@@ -6,8 +11,20 @@ $namespace = "agents"
 $serviceName = "openclaw"
 $domainSuffix = "localhost"
 $routeHost = "$serviceName.$namespace.$domainSuffix"
-$routeUrl = "http://$routeHost`:8080"
+$routeUrl = if ($LocalPort -eq 80) { "http://$routeHost" } else { "http://$routeHost`:$LocalPort" }
 $serviceReadyTimeoutSeconds = 300
+
+function Get-AccessUrl {
+    param(
+        [string]$Scheme,
+        [string]$Host,
+        [int]$Port
+    )
+    if ($Port -eq 80) {
+        return "$Scheme://$Host"
+    }
+    return "$Scheme://$Host`:$Port"
+}
 
 function Require-Command([string]$Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -120,27 +137,38 @@ function Ensure-OpenClawSecret {
         throw "OPENCLAW_GATEWAY_PASSWORD is not set in the current shell."
     }
 
-    & kubectl -n $namespace create secret generic openclaw-secrets `
-        --from-literal=GEMINI_API_KEY="$($env:GEMINI_API_KEY)" `
-        --from-literal=OPENCLAW_GATEWAY_PASSWORD="$($env:OPENCLAW_GATEWAY_PASSWORD)" `
-        --dry-run=client -o yaml | kubectl apply -f -
-    if ($LASTEXITCODE -ne 0) {
-        throw "failed to create/update secret openclaw-secrets in namespace '$namespace'"
+    $tmpSecretFile = Join-Path $env:TEMP ("openclaw-secrets-{0}.env" -f ([Guid]::NewGuid().ToString("N")))
+    $secretLines = @(
+        "GEMINI_API_KEY=$($env:GEMINI_API_KEY)"
+        "OPENCLAW_GATEWAY_PASSWORD=$($env:OPENCLAW_GATEWAY_PASSWORD)"
+    )
+    Set-Content -Path $tmpSecretFile -Value $secretLines -Encoding Ascii
+
+    try {
+        & kubectl -n $namespace create secret generic openclaw-secrets `
+            --from-env-file="$tmpSecretFile" `
+            --dry-run=client -o yaml | kubectl apply -f -
+        if ($LASTEXITCODE -ne 0) {
+            throw "failed to create/update secret openclaw-secrets in namespace '$namespace'"
+        }
+    }
+    finally {
+        Remove-Item -Path $tmpSecretFile -Force -ErrorAction SilentlyContinue
     }
 }
 
 function Ensure-KourierPortForward {
     $existing = Get-CimInstance Win32_Process |
-        Where-Object { $_.Name -match "^kubectl(\.exe)?$" -and $_.CommandLine -match "port-forward\s+svc/kourier\s+8080:80" -and $_.CommandLine -match "-n\s+kourier-system" }
+        Where-Object { $_.Name -match "^kubectl(\.exe)?$" -and $_.CommandLine -match "port-forward\s+svc/kourier\s+${LocalPort}:80" -and $_.CommandLine -match "-n\s+kourier-system" }
 
     if ($existing) {
-        Write-Host "Kourier port-forward already running on 8080."
+        Write-Host "Kourier port-forward already running on $LocalPort."
         return
     }
 
-    Write-Host "Starting Kourier port-forward in background (8080 -> kourier:80) ..."
+    Write-Host "Starting Kourier port-forward in background ($LocalPort -> kourier:80) ..."
     Start-Process -FilePath "kubectl" `
-        -ArgumentList @("-n", "kourier-system", "port-forward", "svc/kourier", "8080:80") `
+        -ArgumentList @("-n", "kourier-system", "port-forward", "svc/kourier", "${LocalPort}:80") `
         -WindowStyle Hidden | Out-Null
 
     Start-Sleep -Seconds 2
@@ -204,7 +232,7 @@ if ($liveUrl) {
     $displayUrl = $routeUrl
     try {
         $parsedUrl = [System.Uri]$liveUrl
-        $displayUrl = "$($parsedUrl.Scheme)://$($parsedUrl.Host):8080"
+        $displayUrl = Get-AccessUrl -Scheme $parsedUrl.Scheme -Host $parsedUrl.Host -Port $LocalPort
     }
     catch {
         $displayUrl = $routeUrl

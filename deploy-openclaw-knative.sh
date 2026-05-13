@@ -6,10 +6,40 @@ KOURIER_VERSION="knative-v1.22.0"
 NAMESPACE="agents"
 SERVICE_NAME="openclaw"
 DOMAIN_SUFFIX="localhost"
+LOCAL_PORT="8080"
 ROUTE_HOST="${SERVICE_NAME}.${NAMESPACE}.${DOMAIN_SUFFIX}"
-ROUTE_URL="http://${ROUTE_HOST}:8080"
 SERVICE_READY_TIMEOUT_SECONDS="300s"
 MANIFEST_PATH="./k8s/openclaw-knative.yaml"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --local-port)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for --local-port. Use 8080 or 80." >&2
+        exit 1
+      fi
+      shift
+      LOCAL_PORT="${1:-}"
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: ./deploy-openclaw-knative.sh [--local-port 8080|80]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ "${LOCAL_PORT}" != "8080" && "${LOCAL_PORT}" != "80" ]]; then
+  echo "Invalid --local-port '${LOCAL_PORT}'. Allowed values: 8080 or 80." >&2
+  exit 1
+fi
+
+if [[ "${LOCAL_PORT}" == "80" ]]; then
+  ROUTE_URL="http://${ROUTE_HOST}"
+else
+  ROUTE_URL="http://${ROUTE_HOST}:${LOCAL_PORT}"
+fi
 
 require_command() {
   local name="$1"
@@ -88,20 +118,31 @@ ensure_openclaw_secret() {
     exit 1
   fi
 
-  kubectl -n "${NAMESPACE}" create secret generic openclaw-secrets \
-    --from-literal="GEMINI_API_KEY=${GEMINI_API_KEY}" \
-    --from-literal="OPENCLAW_GATEWAY_PASSWORD=${OPENCLAW_GATEWAY_PASSWORD}" \
-    --dry-run=client -o yaml | kubectl apply -f -
+  local secret_env_file
+  secret_env_file="$(mktemp)"
+  chmod 600 "${secret_env_file}"
+  cat >"${secret_env_file}" <<EOF
+GEMINI_API_KEY=${GEMINI_API_KEY}
+OPENCLAW_GATEWAY_PASSWORD=${OPENCLAW_GATEWAY_PASSWORD}
+EOF
+
+  if ! kubectl -n "${NAMESPACE}" create secret generic openclaw-secrets \
+    --from-env-file="${secret_env_file}" \
+    --dry-run=client -o yaml | kubectl apply -f -; then
+    rm -f "${secret_env_file}"
+    return 1
+  fi
+  rm -f "${secret_env_file}"
 }
 
 ensure_kourier_port_forward() {
-  if pgrep -f "kubectl -n kourier-system port-forward svc/kourier 8080:80" >/dev/null 2>&1; then
-    echo "Kourier port-forward already running on 8080."
+  if pgrep -f "kubectl -n kourier-system port-forward svc/kourier ${LOCAL_PORT}:80" >/dev/null 2>&1; then
+    echo "Kourier port-forward already running on ${LOCAL_PORT}."
     return
   fi
 
-  echo "Starting Kourier port-forward in background (8080 -> kourier:80) ..."
-  nohup kubectl -n kourier-system port-forward svc/kourier 8080:80 >/tmp/openclaw-kourier-port-forward.log 2>&1 &
+  echo "Starting Kourier port-forward in background (${LOCAL_PORT} -> kourier:80) ..."
+  nohup kubectl -n kourier-system port-forward svc/kourier "${LOCAL_PORT}:80" >/tmp/openclaw-kourier-port-forward.log 2>&1 &
   sleep 2
 }
 
@@ -165,7 +206,11 @@ if [[ -n "${live_url}" ]]; then
   live_no_scheme="${live_url#*://}"
   live_host="${live_no_scheme%%/*}"
   live_host="${live_host%%:*}"
-  display_url="${scheme}://${live_host}:8080"
+  if [[ "${LOCAL_PORT}" == "80" ]]; then
+    display_url="${scheme}://${live_host}"
+  else
+    display_url="${scheme}://${live_host}:${LOCAL_PORT}"
+  fi
   echo "URL: ${display_url}"
   if [[ "${live_host}" != *.localhost ]]; then
     echo "Expected localhost domain for secure browser context. Current domain is not localhost."

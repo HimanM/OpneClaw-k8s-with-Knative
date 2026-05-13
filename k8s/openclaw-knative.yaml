@@ -32,10 +32,12 @@ data:
           enabled: true,
           dangerouslyDisableDeviceAuth: true,
           allowedOrigins: [
+            "http://127.0.0.1",
+            "http://localhost",
+            "http://openclaw.agents.localhost",
             "http://127.0.0.1:8080",
             "http://localhost:8080",
-            "http://openclaw.agents.localhost:8080",
-            "http://openclaw.agents.127.0.0.1.sslip.io:8080"
+            "http://openclaw.agents.localhost:8080"
           ]
         }
       },
@@ -59,6 +61,7 @@ spec:
         autoscaling.knative.dev/max-scale: "1"
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "5m"
     spec:
+      automountServiceAccountToken: false
       timeoutSeconds: 600
       containerConcurrency: 1
       containers:
@@ -76,7 +79,7 @@ spec:
             - dist/index.js
             - gateway
             - --bind
-            - auto
+            - loopback
             - --port
             - "18789"
           ports:
