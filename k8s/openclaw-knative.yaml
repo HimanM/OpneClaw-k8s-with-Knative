@@ -3,6 +3,7 @@ kind: Namespace
 metadata:
   name: agents
 ---
+
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -79,7 +80,9 @@ spec:
             - -ec
             - |
               mkdir -p /home/node/.openclaw
-              cp -f /opt/openclaw-config/openclaw.json /home/node/.openclaw/openclaw.json
+              if [ ! -f /home/node/.openclaw/openclaw.json ]; then
+                cp /opt/openclaw-config/openclaw.json /home/node/.openclaw/openclaw.json
+              fi
               exec node dist/index.js gateway --bind loopback --port 18789
           ports:
             - containerPort: 18789
@@ -88,9 +91,9 @@ spec:
               path: /healthz
               port: 18789
             initialDelaySeconds: 120
-            periodSeconds: 10
+            periodSeconds: 30
             timeoutSeconds: 10
-            failureThreshold: 12
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /healthz
