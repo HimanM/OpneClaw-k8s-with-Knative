@@ -12,7 +12,7 @@ $serviceName = "openclaw"
 $domainSuffix = "localhost"
 $routeHost = "$serviceName.$namespace.$domainSuffix"
 $routeUrl = if ($LocalPort -eq 80) { "http://$routeHost" } else { "http://$routeHost`:$LocalPort" }
-$serviceReadyTimeoutSeconds = 300
+$serviceReadyTimeoutSeconds = 30
 
 function Get-AccessUrl {
     param(
@@ -21,9 +21,9 @@ function Get-AccessUrl {
         [int]$Port
     )
     if ($Port -eq 80) {
-        return "$Scheme://$Host"
+        return "${Scheme}://${Host}"
     }
-    return "$Scheme://$Host`:$Port"
+    return "${Scheme}://${Host}:$Port"
 }
 
 function Require-Command([string]$Name) {

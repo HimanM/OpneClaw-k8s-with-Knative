@@ -75,13 +75,12 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           command:
-            - node
-            - dist/index.js
-            - gateway
-            - --bind
-            - loopback
-            - --port
-            - "18789"
+            - /bin/sh
+            - -ec
+            - |
+              mkdir -p /home/node/.openclaw
+              cp -f /opt/openclaw-config/openclaw.json /home/node/.openclaw/openclaw.json
+              exec node dist/index.js gateway --bind loopback --port 18789
           ports:
             - containerPort: 18789
           livenessProbe:
@@ -119,8 +118,7 @@ spec:
             - name: openclaw-state
               mountPath: /home/node/.openclaw
             - name: openclaw-config
-              mountPath: /home/node/.openclaw/openclaw.json
-              subPath: openclaw.json
+              mountPath: /opt/openclaw-config
               readOnly: true
       volumes:
         - name: openclaw-state
