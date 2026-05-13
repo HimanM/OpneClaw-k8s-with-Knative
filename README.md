@@ -60,6 +60,12 @@ If you run with port 80 mode, use:
 
 `ksvc.status.url` often omits the port. The scripts normalize output to match your selected local port.
 
+## Config persistence and CrashLoop prevention
+
+OpenClaw may write back to `openclaw.json` at runtime. To avoid read-only ConfigMap file lock issues (`EBUSY` / rename failures), this deployment copies config from ConfigMap into the PVC-backed state directory on startup and runs from `/home/node/.openclaw/openclaw.json`.
+
+Startup now force-refreshes that file from ConfigMap each boot to avoid stale/corrupted PVC config blocking startup (for example: missing `gateway.mode`). Runtime edits to `openclaw.json` are writable while running, but are reset on the next restart.
+
 ## Current local security model
 
 - `gateway.bind: "loopback"`

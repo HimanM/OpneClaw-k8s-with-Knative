@@ -87,18 +87,18 @@ spec:
             httpGet:
               path: /healthz
               port: 18789
-            initialDelaySeconds: 30
+            initialDelaySeconds: 120
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            timeoutSeconds: 10
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /healthz
               port: 18789
-            initialDelaySeconds: 15
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
           env:
             - name: GEMINI_API_KEY
               valueFrom:
