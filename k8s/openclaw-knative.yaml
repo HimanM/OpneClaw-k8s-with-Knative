@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agents
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-workspace-pvc
+  namespace: agents
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-config
+  namespace: agents
+data:
+  openclaw.json: |
+    {
+      gateway: {
+        mode: "local",
+        bind: "loopback",
+        port: 18789,
+        auth: { mode: "password" },
+        controlUi: {
+          enabled: true,
+          dangerouslyDisableDeviceAuth: true,
+          allowedOrigins: [
+            "http://127.0.0.1:8080",
+            "http://localhost:8080",
+            "http://openclaw.agents.localhost:8080",
+            "http://openclaw.agents.127.0.0.1.sslip.io:8080"
+          ]
+        }
+      },
+      agents: {
+        defaults: {
+          model: { primary: "google/gemini-2.5-flash" }
+        }
+      }
+    }
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: openclaw
+  namespace: agents
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "1"
+        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "5m"
+    spec:
+      timeoutSeconds: 600
+      containerConcurrency: 1
+      containers:
+        - image: ghcr.io/openclaw/openclaw:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - node
+            - dist/index.js
+            - gateway
+            - --bind
+            - auto
+            - --port
+            - "18789"
+          ports:
+            - containerPort: 18789
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 18789
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 18789
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openclaw-secrets
+                  key: GEMINI_API_KEY
+            - name: OPENCLAW_GATEWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openclaw-secrets
+                  key: OPENCLAW_GATEWAY_PASSWORD
+            - name: OPENCLAW_CONFIG_DIR
+              value: /home/node/.openclaw
+            - name: OPENCLAW_WORKSPACE_DIR
+              value: /home/node/.openclaw/workspace
+          volumeMounts:
+            - name: openclaw-state
+              mountPath: /home/node/.openclaw
+            - name: openclaw-config
+              mountPath: /home/node/.openclaw/openclaw.json
+              subPath: openclaw.json
+              readOnly: true
+      volumes:
+        - name: openclaw-state
+          persistentVolumeClaim:
+            claimName: openclaw-workspace-pvc
+        - name: openclaw-config
+          configMap:
+            name: openclaw-config
+            defaultMode: 0644
