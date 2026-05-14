@@ -1,3 +1,5 @@
+![OpenClaw on Knative (minikube/kind)](docs/.banner/banner.png)
+
 # OpenClaw on Knative (minikube/kind)
 
 This setup runs OpenClaw Gateway on Knative with scale-to-zero and local routing that works with strict origin/auth checks.
