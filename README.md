@@ -39,8 +39,83 @@ chmod +x ./deploy-openclaw-knative.sh
 ./deploy-openclaw-knative.sh --local-port 80
 ```
 
-Both scripts install/refresh Knative Serving + Kourier if needed, configure Knative domain/features, deploy OpenClaw, and print an access URL using your selected local port.
-Default is `8080`; optional alternate is `80`.
+## Manual deployment steps
+
+If you prefer not to use the scripts, here are the equivalent steps:
+
+### 1. Install Knative Serving
+
+```bash
+kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1.22.0/serving-crds.yaml
+kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1.22.0/serving-core.yaml
+```
+
+### 2. Install Kourier ingress
+
+```bash
+kubectl apply -f https://github.com/knative-extensions/net-kourier/releases/download/knative-v1.22.0/kourier.yaml
+kubectl patch configmap/config-network -n knative-serving --type merge \
+  --patch '{"data":{"ingress-class":"kourier.ingress.networking.knative.dev"}}'
+```
+
+### 3. Wait for control plane
+
+```bash
+kubectl wait deployment/activator -n knative-serving --for=condition=Available --timeout=300s
+kubectl wait deployment/autoscaler -n knative-serving --for=condition=Available --timeout=300s
+kubectl wait deployment/controller -n knative-serving --for=condition=Available --timeout=300s
+kubectl wait deployment/webhook -n knative-serving --for=condition=Available --timeout=300s
+kubectl wait deployment/net-kourier-controller -n knative-serving --for=condition=Available --timeout=300s
+```
+
+### 4. Enable PVC feature flags
+
+```bash
+kubectl patch configmap/config-features -n knative-serving --type merge \
+  --patch '{"data":{"kubernetes.podspec-persistent-volume-claim":"enabled","kubernetes.podspec-persistent-volume-write":"enabled"}}'
+```
+
+### 5. Configure domain
+
+```bash
+kubectl patch configmap/config-domain -n knative-serving --type merge \
+  --patch '{"data":{"localhost":"","127.0.0.1.sslip.io":null,"sslip.io":null,"nip.io":null,"127.0.0.1.nip.io":null}}'
+```
+
+### 6. Create namespace and secrets
+
+```bash
+kubectl create namespace agents --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n agents create secret generic openclaw-secrets \
+  --from-literal=GEMINI_API_KEY=your_key_here \
+  --from-literal=OPENCLAW_GATEWAY_PASSWORD=strong_password_here \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### 7. Deploy OpenClaw
+
+```bash
+kubectl apply -f ./k8s/openclaw-knative.yaml
+```
+
+### 8. Wait for readiness
+
+```bash
+kubectl wait ksvc/openclaw -n agents --for=condition=Ready --timeout=300s
+```
+
+### 9. Start port-forward
+
+```bash
+kubectl -n kourier-system port-forward svc/kourier 8080:80 &
+```
+
+### 10. Access OpenClaw
+
+```
+http://openclaw.agents.localhost:8080
+```
 
 ## Why Knative + Kourier
 
