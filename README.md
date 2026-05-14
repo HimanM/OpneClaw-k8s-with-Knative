@@ -158,6 +158,70 @@ Tailscale requires host-level setup outside Kubernetes manifests:
 
 Because those are environment/account-specific, the deploy scripts cannot safely/portably auto-complete them for every machine.
 
+## Visual Walkthrough
+
+### Deployment Process
+
+**1. Starting Deployment**
+
+![Deploy Start](docs/images/01-deploy-start.png)
+
+The deployment script installs Knative Serving, Kourier ingress, configures domain settings, and deploys OpenClaw.
+
+**2. Deployment Success**
+
+![Deploy Success](docs/images/02-deploy-success-url.png)
+
+Once complete, the script outputs the access URL. The service is now ready at `http://openclaw.agents.localhost:8080`.
+
+**3. Kourier Port Forward**
+
+![Kourier Port Forward](docs/images/03-kourier-port-forward.png)
+
+The script automatically starts port-forwarding from localhost:8080 to the Kourier service, enabling local access to the Knative service.
+
+### Using OpenClaw
+
+**4. Control UI Login**
+
+![Control UI Login](docs/images/04-control-ui-login.png)
+
+Access the OpenClaw Control UI at the provided URL. Enter the gateway password you set in `OPENCLAW_GATEWAY_PASSWORD`.
+
+**5. Control UI Dashboard**
+
+![Control UI Dashboard](docs/images/05-control-ui-dashboard.png)
+
+Once logged in, you can interact with OpenClaw agents, manage sessions, and configure channels.
+
+### Scale-to-Zero Behavior
+
+**6. Pod Terminating (Scale to Zero)**
+
+![Pod Terminating](docs/images/06-terminating-pod.png)
+
+After 5 minutes of inactivity, Knative automatically scales the pod to zero. The pod enters `Terminating` state and resources are freed.
+
+**7. Pod Creation (Scale from Zero)**
+
+![Pod Creating](docs/images/07-scale-to-one-creating-pod.png)
+
+When a new request arrives, Knative detects traffic and creates a new pod. The pod goes through initialization.
+
+**8. Pod Running (Ready to Serve)**
+
+![Pod Running](docs/images/07-scale-to-one-pod-running.png)
+
+The pod becomes ready and starts serving requests. Your session state persists across scale cycles thanks to the PVC.
+
+## Key Features Demonstrated
+
+- ✅ **Serverless on Kubernetes**: True scale-to-zero with Knative
+- ✅ **Fast Cold Start**: Pod ready in ~30-60 seconds
+- ✅ **State Persistence**: PVC preserves configs and data across restarts
+- ✅ **Automatic Scaling**: Scales to 0 after 5 minutes idle, wakes on demand
+- ✅ **Local Development**: Works with localhost routing and strict CORS
+
 ## Useful commands
 
 ```bash
