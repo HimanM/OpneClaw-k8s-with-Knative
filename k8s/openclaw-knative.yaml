@@ -88,9 +88,10 @@ spec:
             - containerPort: 18789
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: 18789
-            initialDelaySeconds: 30
+              host: 127.0.0.1
+            initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 12
