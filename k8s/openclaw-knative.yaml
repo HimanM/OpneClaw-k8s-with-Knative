@@ -86,14 +86,6 @@ spec:
               exec node dist/index.js gateway --bind loopback --port 18789
           ports:
             - containerPort: 18789
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 18789
-            initialDelaySeconds: 120
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /healthz
@@ -117,6 +109,13 @@ spec:
               value: /home/node/.openclaw
             - name: OPENCLAW_WORKSPACE_DIR
               value: /home/node/.openclaw/workspace
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
           volumeMounts:
             - name: openclaw-state
               mountPath: /home/node/.openclaw
