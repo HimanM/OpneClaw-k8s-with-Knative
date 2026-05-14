@@ -1,0 +1,64 @@
+name: Generate and Embed Banner
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_image_id:
+        description: 'Base Image ID (leave blank for random)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write # Required to allow the bot to commit the changes
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  generate-banner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch Banner SVG
+        run: |
+          # Uses the public API domain to generate the banner
+          API_URL="https://readmeapi.himanmanduja.fun/api/banner/${{ github.repository }}"
+          
+          # Append base_image_id if the user provided one before clicking "Run workflow"
+          if [ -n "${{ github.event.inputs.base_image_id }}" ]; then
+            API_URL="$API_URL/${{ github.event.inputs.base_image_id }}"
+          fi
+          
+          echo "Fetching from: $API_URL"
+          # We pass the automatically provided GITHUB_TOKEN so the API can read private repos
+          mkdir -p .banner
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$API_URL" -o .banner/banner.svg
+
+      - name: Inject Banner into README
+        run: |
+          # We use HTML comments so we only inject it once.
+          # If the banner marker doesn't exist, prepend it to the file.
+          if ! grep -q "<!-- BANNER_START -->" README.md; then
+            echo "<!-- BANNER_START -->" > temp_readme.md
+            echo "<p align=\"center\">" >> temp_readme.md
+            echo "  <img src=\"./.banner/banner.svg\" width=\"100%\" alt=\"Project Banner\">" >> temp_readme.md
+            echo "</p>" >> temp_readme.md
+            echo "<!-- BANNER_END -->" >> temp_readme.md
+            echo "" >> temp_readme.md
+            
+            # Append the original README content
+            cat README.md >> temp_readme.md
+            mv temp_readme.md README.md
+          fi
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .banner/banner.svg README.md
+          
+          # Only commit if there are actual changes
+          git diff --staged --quiet || git commit -m "chore: embed dynamic banner"
+          git push
