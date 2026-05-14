@@ -2,6 +2,12 @@
 
 This setup runs OpenClaw Gateway on Knative with scale-to-zero and local routing that works with strict origin/auth checks.
 
+
+
+https://github.com/user-attachments/assets/e463558f-ff4e-4bb1-9437-283b0c9a6eb5
+
+
+
 ## Files
 
 - `k8s\openclaw-knative.yaml`: Namespace, PVC, OpenClaw config, Knative Service
