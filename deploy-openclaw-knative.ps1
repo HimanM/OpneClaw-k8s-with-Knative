@@ -12,7 +12,7 @@ $serviceName = "openclaw"
 $domainSuffix = "localhost"
 $routeHost = "$serviceName.$namespace.$domainSuffix"
 $routeUrl = if ($LocalPort -eq 80) { "http://$routeHost" } else { "http://$routeHost`:$LocalPort" }
-$serviceReadyTimeoutSeconds = 30
+$serviceReadyTimeoutSeconds = 300
 
 function Get-AccessUrl {
     param(
@@ -44,7 +44,8 @@ function Invoke-Kubectl {
 }
 
 function Ensure-KnativeServing {
-    $knativeNs = (& kubectl get namespace knative-serving --ignore-not-found -o name).Trim()
+    $result = & kubectl get namespace knative-serving --ignore-not-found -o name
+    $knativeNs = if ($result) { $result.Trim() } else { "" }
     if (-not $knativeNs) {
         Write-Host "Installing Knative Serving $knativeVersion ..."
         Invoke-Kubectl apply -f "https://github.com/knative/serving/releases/download/$knativeVersion/serving-crds.yaml"
