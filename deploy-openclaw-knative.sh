@@ -141,8 +141,18 @@ ensure_kourier_port_forward() {
     return
   fi
 
+  if [[ "${LOCAL_PORT}" == "80" ]]; then
+    if [[ "$(id -u)" -ne 0 ]]; then
+      echo "Port 80 requires root. Re-running port-forward with sudo ..."
+      nohup sudo kubectl -n kourier-system port-forward svc/kourier 80:80 >/tmp/openclaw-kourier-port-forward.log 2>&1 &
+    else
+      nohup kubectl -n kourier-system port-forward svc/kourier 80:80 >/tmp/openclaw-kourier-port-forward.log 2>&1 &
+    fi
+  else
+    nohup kubectl -n kourier-system port-forward svc/kourier "${LOCAL_PORT}:80" >/tmp/openclaw-kourier-port-forward.log 2>&1 &
+  fi
+
   echo "Starting Kourier port-forward in background (${LOCAL_PORT} -> kourier:80) ..."
-  nohup kubectl -n kourier-system port-forward svc/kourier "${LOCAL_PORT}:80" >/tmp/openclaw-kourier-port-forward.log 2>&1 &
   sleep 2
 }
 
